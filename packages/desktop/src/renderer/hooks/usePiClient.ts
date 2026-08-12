@@ -1,60 +1,56 @@
 import { useState, useEffect, useCallback } from "react";
-import { getPi, type PiEvent, type SessionInfo } from "../lib/ipc-client";
+import { piClient, type PiEvent, type SessionInfo } from "../lib/ipc-client";
 
 export function usePiClient() {
+	const [connected, setConnected] = useState(false);
 	const [activeSession, setActiveSession] = useState<SessionInfo | null>(null);
 	const [events, setEvents] = useState<PiEvent[]>([]);
 	const [loading, setLoading] = useState(false);
 
 	useEffect(() => {
-		const pi = getPi();
-		const unsubscribe = pi.onEvent((event) => {
-			setEvents((prev) => [...prev, event]);
+		piClient.connect();
+		const unsub = piClient.onEvent((event) => {
+			switch (event.type) {
+				case "connected":
+					setConnected(true);
+					break;
+				case "session_created":
+					setActiveSession(event.data as unknown as SessionInfo);
+					setEvents([]);
+					break;
+				default:
+					setEvents((prev) => [...prev, event]);
+					break;
+			}
 		});
-		return unsubscribe;
+
+		return () => {
+			unsub();
+			setConnected(false);
+		};
 	}, []);
 
 	const createSession = useCallback(async () => {
 		setLoading(true);
-		try {
-			const pi = getPi();
-			const session = await pi.createSession();
-			setActiveSession(session);
-			setEvents([]);
-			return session;
-		} finally {
-			setLoading(false);
-		}
+		piClient.send({ type: "create_session" });
+		setLoading(false);
 	}, []);
 
 	const prompt = useCallback(async (text: string) => {
-		const pi = getPi();
-		await pi.prompt(text);
-	}, []);
-
-	const steer = useCallback(async (text: string) => {
-		const pi = getPi();
-		await pi.steer(text);
-	}, []);
+		piClient.send({ type: "prompt", text, sessionId: activeSession?.id });
+	}, [activeSession]);
 
 	const abort = useCallback(async () => {
-		const pi = getPi();
-		await pi.abort();
-	}, []);
-
-	const setThinking = useCallback(async (level: string) => {
-		const pi = getPi();
-		await pi.setThinking(level);
-	}, []);
+		piClient.send({ type: "abort", sessionId: activeSession?.id });
+	}, [activeSession]);
 
 	return {
+		connected,
 		activeSession,
 		events,
 		loading,
 		createSession,
 		prompt,
-		steer,
 		abort,
-		setThinking,
 	};
 }

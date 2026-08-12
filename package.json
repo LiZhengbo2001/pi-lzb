@@ -72,6 +72,6 @@
 		}
 	},
 	"allowScripts": {
-		"electron@32.3.3": true
+		"electron@28.3.3": true
 	}
 }

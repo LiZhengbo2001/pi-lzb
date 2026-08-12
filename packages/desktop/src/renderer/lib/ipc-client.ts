@@ -1,13 +1,3 @@
-interface PiApi {
-	createSession(): Promise<SessionInfo>;
-	prompt(text: string): Promise<void>;
-	steer(text: string): Promise<void>;
-	abort(): Promise<void>;
-	setThinking(level: string): Promise<void>;
-	getActiveSession(): Promise<SessionInfo | null>;
-	onEvent(callback: (event: PiEvent) => void): () => void;
-}
-
 export interface SessionInfo {
 	id: string;
 	name: string;
@@ -18,20 +8,57 @@ export interface SessionInfo {
 }
 
 export interface PiEvent {
-	sessionId: string;
+	sessionId?: string;
 	type: string;
 	data: Record<string, unknown>;
 }
 
-declare global {
-	interface Window {
-		pi: PiApi;
+type EventHandler = (event: PiEvent) => void;
+
+class PiClient {
+	private ws: WebSocket | null = null;
+	private handlers = new Set<EventHandler>();
+	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+	connect(): void {
+		if (this.ws?.readyState === WebSocket.OPEN) return;
+
+		const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+		const url = `${protocol}//${location.host}`;
+
+		try {
+			this.ws = new WebSocket(url);
+			this.ws.onmessage = (e) => {
+				try {
+					const msg = JSON.parse(e.data);
+					for (const h of this.handlers) h(msg);
+				} catch { /* ignore */ }
+			};
+			this.ws.onclose = () => {
+				this.reconnectTimer = setTimeout(() => this.connect(), 2000);
+			};
+			this.ws.onerror = () => {
+				this.ws?.close();
+			};
+		} catch {
+			this.reconnectTimer = setTimeout(() => this.connect(), 2000);
+		}
+	}
+
+	send(msg: Record<string, unknown>): void {
+		if (this.ws?.readyState === WebSocket.OPEN) {
+			this.ws.send(JSON.stringify(msg));
+		}
+	}
+
+	onEvent(handler: EventHandler): () => void {
+		this.handlers.add(handler);
+		return () => this.handlers.delete(handler);
+	}
+
+	get connected(): boolean {
+		return this.ws?.readyState === WebSocket.OPEN;
 	}
 }
 
-export function getPi(): PiApi {
-	if (!window.pi) {
-		throw new Error("Pi API not available. Ensure preload script loaded.");
-	}
-	return window.pi;
-}
+export const piClient = new PiClient();

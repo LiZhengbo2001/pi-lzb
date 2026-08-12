@@ -6,24 +6,28 @@
   "main": "./dist/main/index.js",
   "scripts": {
     "clean": "shx rm -rf dist",
-    "build": "tsgo -p tsconfig.json && npm run build:renderer",
+    "build": "tsgo -p tsconfig.json && npm run build:renderer && npm run build:server",
     "build:renderer": "node esbuild.renderer.mjs",
-    "start": "npm run build && electron .",
-    "dev": "node dev.mjs",
-    "package": "npm run build && electron-builder",
+    "build:server": "node esbuild.server.mjs",
+    "start": "npm run build && npx @tauri-apps/cli dev",
+    "dev": "npx @tauri-apps/cli dev",
+    "package": "npm run build && npx @tauri-apps/cli build",
     "typecheck": "tsgo -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@earendil-works/pi-client": "^0.84.1",
     "@earendil-works/pi-protocol": "^0.84.1",
     "@earendil-works/pi-server": "^0.84.1",
-    "electron": "32.3.3",
+    "@tauri-apps/api": "2.11.1",
+    "electron": "28.3.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "ws": "8.21.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@types/ws": "8.18.1",
     "electron-builder": "^25.0.0",
     "shx": "0.4.0"
   },

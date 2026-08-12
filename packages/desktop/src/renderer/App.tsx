@@ -7,26 +7,24 @@ export function App() {
 	const pi = usePiClient();
 	const [input, setInput] = useState("");
 
-	const handleCreate = async () => {
-		await pi.createSession();
-	};
+	const handleCreate = () => pi.createSession();
 
-	const handleSubmit = async () => {
+	const handleSubmit = () => {
 		if (!input.trim()) return;
-		const text = input;
+		pi.prompt(input);
 		setInput("");
-		await pi.prompt(text);
 	};
 
 	if (!pi.activeSession) {
 		return React.createElement("div", { className: "chat-empty" },
 			React.createElement("h2", null, "Pi Desktop"),
-			React.createElement("p", null, "编程助手的桌面版"),
+			React.createElement("p", null,
+				pi.connected ? "WebSocket connected" : "Connecting..."),
 			React.createElement("button", {
 				className: "new-session-btn",
 				onClick: handleCreate,
-				disabled: pi.loading,
-			}, pi.loading ? "创建中..." : "新建会话"),
+				disabled: !pi.connected,
+			}, "New Session"),
 		);
 	}
 
@@ -35,9 +33,10 @@ export function App() {
 			React.createElement("div", null,
 				React.createElement("h1", null, pi.activeSession.name),
 				React.createElement("span", { className: "model-info" },
-					pi.activeSession.modelId, " — ", pi.activeSession.thinkingLevel),
+					pi.activeSession.modelId, " | ",
+					pi.connected ? "connected" : "offline"),
 			),
-			React.createElement("button", { onClick: handleCreate }, "新建"),
+			React.createElement("button", { onClick: handleCreate }, "New"),
 		),
 		React.createElement(ChatView, { events: pi.events, sessionId: pi.activeSession.id }),
 		React.createElement(InputBar, {
