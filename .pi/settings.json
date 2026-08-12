@@ -1,4 +1,4 @@
-{
-  "defaultProvider": "deepseek",
-  "defaultModel": "deepseek-chat"
+﻿{
+    "defaultProvider":  "ollama",
+    "defaultModel":  "qwen2.5-coder:7b-instruct-q4_K_M"
 }

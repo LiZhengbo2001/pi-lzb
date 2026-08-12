@@ -1,0 +1,4 @@
+{
+  "showToolCalls": true,
+  "_comment": "显示模型输出的原生 tool_calls JSON，用于调试小模型工具调用。不需要时改为 false"
+}

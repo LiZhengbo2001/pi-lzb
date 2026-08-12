@@ -1,0 +1,32 @@
+{
+  "_说明": "本地 Ollama 模型注册表。要切换模型，改 active 字段的值，然后运行 .\\switch-model.ps1",
+
+  "active": "llama3.1",
+
+  "模型列表": {
+    "llama3.1": {
+      "modelId": "llama3.1:8b-noprompt",
+      "reasoning": false,
+      "contextWindow": 16384,
+      "说明": "Llama 3.1 8B — tool call 成功率最高，速度正常"
+    },
+    "rnj-1": {
+      "modelId": "rnj-1:8b-noprompt",
+      "reasoning": false,
+      "contextWindow": 32768,
+      "说明": "Gemma3 8.3B — tool call 格式正确，速度慢，显存吃紧"
+    },
+    "qwen-coder": {
+      "modelId": "qwen2.5-coder:7b-noprompt",
+      "reasoning": false,
+      "contextWindow": 32768,
+      "说明": "Qwen2.5 Coder 7B — 代码能力强，但 tool call 格式不兼容"
+    },
+    "ornith": {
+      "modelId": "ornith:9b-noprompt",
+      "reasoning": true,
+      "contextWindow": 32768,
+      "说明": "Qwen35 9B — 通用模型，支持 thinking，光说不练"
+    }
+  }
+}
