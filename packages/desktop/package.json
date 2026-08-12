@@ -1,0 +1,50 @@
+{
+  "name": "@earendil-works/pi-desktop",
+  "version": "0.1.0",
+  "description": "Desktop GUI for Pi coding agent",
+  "type": "commonjs",
+  "main": "./dist/main/index.js",
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "build": "tsgo -p tsconfig.json && npm run build:renderer",
+    "build:renderer": "node esbuild.renderer.mjs",
+    "start": "npm run build && electron .",
+    "dev": "node dev.mjs",
+    "package": "npm run build && electron-builder",
+    "typecheck": "tsgo -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@earendil-works/pi-client": "^0.84.1",
+    "@earendil-works/pi-protocol": "^0.84.1",
+    "@earendil-works/pi-server": "^0.84.1",
+    "electron": "32.3.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "electron-builder": "^25.0.0",
+    "shx": "0.4.0"
+  },
+  "build": {
+    "appId": "dev.pi.desktop",
+    "productName": "Pi Desktop",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src/renderer/assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

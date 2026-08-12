@@ -22,6 +22,21 @@
 		"./client": {
 			"types": "./dist/client/index.d.ts",
 			"import": "./dist/client/index.js"
+		},
+		"./core/sdk": {
+			"types": "./dist/core/sdk.d.ts",
+			"import": "./dist/core/sdk.js",
+			"require": "./dist/core/sdk.js"
+		},
+		"./core/agent-session": {
+			"types": "./dist/core/agent-session.d.ts",
+			"import": "./dist/core/agent-session.js",
+			"require": "./dist/core/agent-session.js"
+		},
+		"./core/session-manager": {
+			"types": "./dist/core/session-manager.d.ts",
+			"import": "./dist/core/session-manager.js",
+			"require": "./dist/core/session-manager.js"
 		}
 	},
 	"files": [

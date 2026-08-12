@@ -17,6 +17,10 @@
 		"./unix": {
 			"types": "./dist/transports/unix/index.d.ts",
 			"import": "./dist/transports/unix/index.js"
+		},
+		"./in-process": {
+			"types": "./dist/transports/in-process/index.d.ts",
+			"import": "./dist/transports/in-process/index.js"
 		}
 	},
 	"files": [

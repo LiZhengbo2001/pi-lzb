@@ -70,5 +70,8 @@
 		"gaxios": {
 			"rimraf": "6.1.2"
 		}
+	},
+	"allowScripts": {
+		"electron@32.3.3": true
 	}
 }
