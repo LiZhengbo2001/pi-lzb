@@ -11,7 +11,7 @@ await esbuild.build({
   platform: "node",
   target: "node22",
   format: "cjs",
-  external: [],
+  external: ["@earendil-works/*"],
   minify: false,
 });
 

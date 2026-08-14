@@ -76,6 +76,18 @@ body {
   gap: 12px;
 }
 .chat-empty h2 { font-size: 20px; color: var(--text); }
+.chat-empty .cwd-input {
+  width: 320px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+.chat-empty .cwd-input:focus { border-color: var(--accent); }
 
 /* Messages */
 .message {

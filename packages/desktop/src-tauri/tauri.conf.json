@@ -25,9 +25,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": "nsis",
     "resources": [
       "../dist/server/bundle.js",
+      "../dist/server/node_modules/**/*",
       "../dist/renderer/**/*"
     ],
     "icon": [

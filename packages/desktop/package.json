@@ -9,13 +9,16 @@
     "build": "tsgo -p tsconfig.json && npm run build:renderer && npm run build:server",
     "build:renderer": "node esbuild.renderer.mjs",
     "build:server": "node esbuild.server.mjs",
+    "vendor": "node scripts/vendor-node-modules.mjs",
     "start": "npm run build && npx @tauri-apps/cli dev",
     "dev": "npx @tauri-apps/cli dev",
-    "package": "npm run build && npx @tauri-apps/cli build",
+    "package": "npm run build && npm run vendor && npx @tauri-apps/cli build",
     "typecheck": "tsgo -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.84.1",
     "@earendil-works/pi-client": "^0.84.1",
+    "@earendil-works/pi-coding-agent": "^0.84.1",
     "@earendil-works/pi-protocol": "^0.84.1",
     "@earendil-works/pi-server": "^0.84.1",
     "@tauri-apps/api": "2.11.1",

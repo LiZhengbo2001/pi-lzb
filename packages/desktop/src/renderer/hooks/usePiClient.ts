@@ -30,9 +30,9 @@ export function usePiClient() {
 		};
 	}, []);
 
-	const createSession = useCallback(async () => {
+	const createSession = useCallback(async (cwd?: string) => {
 		setLoading(true);
-		piClient.send({ type: "create_session" });
+		piClient.send({ type: "create_session", cwd });
 		setLoading(false);
 	}, []);
 

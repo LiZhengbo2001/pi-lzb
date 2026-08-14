@@ -23,8 +23,9 @@ class PiClient {
 	connect(): void {
 		if (this.ws?.readyState === WebSocket.OPEN) return;
 
-		const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-		const url = `${protocol}//${location.host}`;
+		// Node backend always listens on a fixed localhost port; in production
+		// the renderer loads via tauri:// so location.host is wrong — hardcode.
+		const url = "ws://localhost:1420";
 
 		try {
 			this.ws = new WebSocket(url);
