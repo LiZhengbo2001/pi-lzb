@@ -15,6 +15,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
+import { type AblationConfig, LITE_TOOL_TEXT } from "../ablation/lite.ts";
 import type {
 	Agent,
 	AgentEvent,
@@ -225,6 +226,8 @@ export interface AgentSessionConfig {
 	extensionRunnerRef?: { current?: ExtensionRunner };
 	/** Session start event metadata emitted when extensions bind to this runtime. */
 	sessionStartEvent?: SessionStartEvent;
+	/** Ablation switches (experiment doc E2). All off = vanilla. */
+	ablation?: AblationConfig;
 }
 
 export interface ExtensionBindings {
@@ -373,6 +376,7 @@ export class AgentSession {
 	private _baseSystemPrompt = "";
 	private _baseSystemPromptOptions!: BuildSystemPromptOptions;
 	private _systemPromptOverride?: string;
+	private _ablation?: AblationConfig;
 
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
@@ -389,6 +393,7 @@ export class AgentSession {
 		this._excludedToolNames = config.excludedToolNames ? new Set(config.excludedToolNames) : undefined;
 		this._baseToolsOverride = config.baseToolsOverride;
 		this._sessionStartEvent = config.sessionStartEvent ?? { type: "session_start", reason: "startup" };
+		this._ablation = config.ablation;
 
 		// Always subscribe to agent events for internal handling
 		// (session persistence, extensions, auto-compaction, retry logic)
@@ -1052,6 +1057,8 @@ export class AgentSession {
 			selectedTools: validToolNames,
 			toolSnippets,
 			promptGuidelines,
+			litePrompt: this._ablation?.litePrompt,
+			fewShotStyle: this._ablation?.fewShot,
 		};
 		return buildSystemPrompt(this._baseSystemPromptOptions);
 	}
@@ -2525,6 +2532,15 @@ export class AgentSession {
 		const toolRegistry = new Map(wrappedBuiltInTools.map((tool) => [tool.name, tool]));
 		for (const tool of wrappedExtensionTools as AgentTool[]) {
 			toolRegistry.set(tool.name, tool);
+		}
+		// B1 lite tools: override tool descriptions with one-line versions.
+		if (this._ablation?.liteTools) {
+			for (const [name, tool] of toolRegistry) {
+				const lite = LITE_TOOL_TEXT[name];
+				if (lite) {
+					tool.description = lite.description;
+				}
+			}
 		}
 		this._toolRegistry = toolRegistry;
 

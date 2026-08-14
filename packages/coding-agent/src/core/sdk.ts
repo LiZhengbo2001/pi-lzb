@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { Agent, type AgentMessage, setDefaultStreamFn, type ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { type AblationConfig, DEFAULT_ABLATION } from "../ablation/lite.ts";
 import { clampThinkingLevel, type Message, type Model, streamSimple } from "@earendil-works/pi-ai/compat";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
@@ -82,6 +83,8 @@ export interface CreateAgentSessionOptions {
 	settingsManager?: SettingsManager;
 	/** Session start event metadata for extension runtime startup. */
 	sessionStartEvent?: SessionStartEvent;
+	/** Ablation switches (experiment doc E2). All off = vanilla. */
+	ablation?: AblationConfig;
 }
 
 /** Result from createAgentSession */
@@ -291,6 +294,16 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	const extensionRunnerRef: { current?: ExtensionRunner } = {};
 
+	const ablation = options.ablation ?? DEFAULT_ABLATION;
+	const ablationActive =
+		ablation.litePrompt ||
+		ablation.liteTools ||
+		ablation.fewShot !== "none" ||
+		ablation.repair ||
+		ablation.retries > 0 ||
+		ablation.idleThreshold > 0 ||
+		ablation.maxTurns > 0;
+
 	agent = new Agent({
 		initialState: {
 			systemPrompt: "",
@@ -298,6 +311,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			thinkingLevel,
 			tools: [],
 		},
+		maxTurns: ablation.maxTurns > 0 ? ablation.maxTurns : undefined,
+		maxConsecutiveTextOnlyTurns: ablation.idleThreshold > 0 ? ablation.idleThreshold : undefined,
+		parseRepair: ablation.repair ? { enabled: true, style: "both" } : undefined,
+		parseFailureRetries: ablation.retries > 0 ? ablation.retries : undefined,
+		onLoopEvent:
+			ablationActive || process.env.PI_TRACE
+				? (event) => console.error(JSON.stringify(event))
+				: undefined,
 		convertToLlm: convertToLlmWithBlockImages,
 		streamFn: async (model, context, options) => {
 			const providerRetrySettings = settingsManager.getProviderRetrySettings();
@@ -387,6 +408,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		excludedToolNames,
 		extensionRunnerRef,
 		sessionStartEvent: options.sessionStartEvent,
+		ablation,
 	});
 	const extensionsResult = resourceLoader.getExtensions();
 

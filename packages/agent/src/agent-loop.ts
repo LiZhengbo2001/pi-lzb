@@ -8,8 +8,10 @@ import {
 	type Context,
 	EventStream,
 	type ToolResultMessage,
+	type UserMessage,
 	validateToolArguments,
 } from "@earendil-works/pi-ai";
+import { repairToolCalls } from "./parse-repair.ts";
 import { getDefaultStreamFn } from "./stream-fn.ts";
 import type {
 	AgentContext,
@@ -19,6 +21,7 @@ import type {
 	AgentTool,
 	AgentToolCall,
 	AgentToolResult,
+	LoopEvent,
 	StreamFn,
 } from "./types.ts";
 
@@ -163,11 +166,29 @@ async function runLoop(
 	let currentContext = initialContext;
 	let config = initialConfig;
 	let firstTurn = true;
+	let turn = 0;
+	let textOnlyStreak = 0;
 	// Check for steering messages at start (user may have typed while waiting)
 	let pendingMessages: AgentMessage[] = (await config.getSteeringMessages?.()) || [];
 
+	const emitLoopEvent = (event: LoopEvent): void => {
+		config.onLoopEvent?.(event);
+	};
+	const maxTurns = config.maxTurns !== undefined && config.maxTurns > 0 ? config.maxTurns : undefined;
+	const idleThreshold =
+		config.maxConsecutiveTextOnlyTurns !== undefined && config.maxConsecutiveTextOnlyTurns > 0
+			? config.maxConsecutiveTextOnlyTurns
+			: undefined;
+	const retryBudget = config.parseFailureRetries ?? 0;
+
 	// Outer loop: continues when queued follow-up messages arrive after agent would stop
 	while (true) {
+		if (maxTurns !== undefined && turn >= maxTurns) {
+			emitLoopEvent({ type: "loop_agent_end", turn, reason: "max_turns" });
+			await emit({ type: "agent_end", messages: newMessages });
+			return;
+		}
+
 		let hasMoreToolCalls = true;
 
 		// Inner loop: process tool calls and steering messages
@@ -177,6 +198,7 @@ async function runLoop(
 			} else {
 				firstTurn = false;
 			}
+			emitLoopEvent({ type: "loop_turn_start", turn });
 
 			// Process pending messages (inject before next assistant response)
 			if (pendingMessages.length > 0) {
@@ -189,22 +211,64 @@ async function runLoop(
 				pendingMessages = [];
 			}
 
-			// Stream assistant response
-			const message = await streamAssistantResponse(currentContext, config, signal, emit, streamFunction);
-			newMessages.push(message);
+			// Stream assistant response, with optional parse repair (F1/F2) and
+			// parse-failure retry (E1). All retry/repair machinery is skipped when
+			// the ablation switches are off (retryBudget = 0, parseRepair unset),
+			// keeping vanilla behavior byte-identical.
+			let message: AssistantMessage;
+			for (let attempt = 0; ; attempt++) {
+				const streamed = await streamAssistantResponse(currentContext, config, signal, emit, streamFunction);
 
-			if (message.stopReason === "error" || message.stopReason === "aborted") {
-				await emit({ type: "turn_end", message, toolResults: [] });
-				await emit({ type: "agent_end", messages: newMessages });
-				return;
+				if (streamed.stopReason === "error" || streamed.stopReason === "aborted") {
+					if (attempt < retryBudget) {
+						pushParseFailureFeedback(currentContext, streamed.errorMessage ?? streamed.stopReason);
+						emitLoopEvent({ type: "loop_retry", turn, reason: "stream_error", attempt: attempt + 1 });
+						continue;
+					}
+					emitLoopEvent({ type: "loop_agent_end", turn, reason: "error" });
+					await emit({ type: "turn_end", message: streamed, toolResults: [] });
+					await emit({ type: "agent_end", messages: newMessages });
+					return;
+				}
+
+				message = streamed;
+				let repairError: string | undefined;
+				if (config.parseRepair?.enabled) {
+					const repaired = repairToolCalls(message, config.parseRepair.style ?? "both");
+					repairError = repaired.error;
+					emitLoopEvent({
+						type: "loop_repair",
+						turn,
+						repairedCount: repaired.repairedCount,
+						error: repaired.error,
+					});
+				}
+				const hasCalls = message.content.some((c) => c.type === "toolCall");
+				if (repairError && !hasCalls && attempt < retryBudget) {
+					pushParseFailureFeedback(currentContext, repairError);
+					emitLoopEvent({ type: "loop_retry", turn, reason: "parse_failed", attempt: attempt + 1 });
+					continue;
+				}
+				break;
 			}
+			newMessages.push(message);
+			turn++;
 
 			// Check for tool calls
 			const toolCalls = message.content.filter((c) => c.type === "toolCall");
+			emitLoopEvent({
+				type: "loop_tool_calls",
+				turn,
+				calls: toolCalls.map((c) => ({
+					name: c.name,
+					valid: !!c.arguments && typeof c.arguments === "object" && Object.keys(c.arguments).length > 0,
+				})),
+			});
 
 			const toolResults: ToolResultMessage[] = [];
 			hasMoreToolCalls = false;
 			if (toolCalls.length > 0) {
+				textOnlyStreak = 0;
 				// A "length" stop means the output was cut off by the token limit, so
 				// every tool call in the message may carry truncated arguments. Fail
 				// them all instead of executing potentially borked calls.
@@ -219,6 +283,8 @@ async function runLoop(
 					currentContext.messages.push(result);
 					newMessages.push(result);
 				}
+			} else {
+				textOnlyStreak++;
 			}
 
 			await emit({ type: "turn_end", message, toolResults });
@@ -244,6 +310,28 @@ async function runLoop(
 				};
 			}
 
+			// E3 idle detection: too many consecutive tool-free text turns means
+			// the model is narrating instead of acting. Inject a replan prompt and
+			// skip this turn's steering/follow-up polls.
+			if (
+				idleThreshold !== undefined &&
+				toolCalls.length === 0 &&
+				textOnlyStreak >= idleThreshold
+			) {
+				const replan = createUserTextMessage(
+					"You have responded several times in a row without using any tool. " +
+						"Stop and either call a tool or finish the task now.",
+				);
+				currentContext.messages.push(replan);
+				newMessages.push(replan);
+				await emit({ type: "message_start", message: replan });
+				await emit({ type: "message_end", message: replan });
+				emitLoopEvent({ type: "loop_idle_replan", turn });
+				textOnlyStreak = 0;
+				pendingMessages = [];
+				continue;
+			}
+
 			if (
 				await config.shouldStopAfterTurn?.({
 					message,
@@ -252,6 +340,7 @@ async function runLoop(
 					newMessages,
 				})
 			) {
+				emitLoopEvent({ type: "loop_agent_end", turn, reason: "user_stop" });
 				await emit({ type: "agent_end", messages: newMessages });
 				return;
 			}
@@ -271,7 +360,35 @@ async function runLoop(
 		break;
 	}
 
+	emitLoopEvent({ type: "loop_agent_end", turn, reason: "no_followup" });
 	await emit({ type: "agent_end", messages: newMessages });
+}
+
+/** Create a plain user text message (feedback/replan prompts). */
+function createUserTextMessage(text: string): UserMessage {
+	return {
+		role: "user",
+		content: text,
+		timestamp: Date.now(),
+	};
+}
+
+/**
+ * E1 parse-failure feedback: drop the last assistant message (the one that
+ * failed to produce usable tool calls) and append a feedback prompt asking
+ * the model to re-emit the tool call.
+ */
+function pushParseFailureFeedback(context: AgentContext, reason: string): void {
+	const messages = context.messages;
+	if (messages.length > 0 && messages[messages.length - 1].role === "assistant") {
+		messages.pop();
+	}
+	messages.push(
+		createUserTextMessage(
+			`[system feedback] Your last response could not be parsed as tool calls (${reason}). ` +
+				"Re-emit the tool call as valid JSON.",
+		),
+	);
 }
 
 /**

@@ -14,6 +14,7 @@ import type {
 	Usage,
 } from "@earendil-works/pi-ai";
 import type { Static, TSchema } from "typebox";
+import type { ToolCallJsonStyle } from "./parse-repair.ts";
 
 /**
  * Stream function used by the agent loop. `Models.streamSimple` satisfies
@@ -146,8 +147,53 @@ export interface AgentLoopTurnUpdate {
 
 export interface PrepareNextTurnContext extends ShouldStopAfterTurnContext {}
 
+/**
+ * Ablation observability events (experiment doc F1/F2/E1/E3). Emitted via
+ * `AgentLoopConfig.onLoopEvent` when the loop is driven by the harness.
+ * Absent in vanilla runs — the event sink is only installed when ablation
+ * switches are configured.
+ */
+export type LoopEvent =
+	| { type: "loop_turn_start"; turn: number }
+	| { type: "loop_tool_calls"; turn: number; calls: Array<{ name: string; valid: boolean }> }
+	| { type: "loop_repair"; turn: number; repairedCount: number; error?: string }
+	| { type: "loop_retry"; turn: number; reason: string; attempt: number }
+	| { type: "loop_idle_replan"; turn: number }
+	| { type: "loop_agent_end"; turn: number; reason: string };
+
 export interface AgentLoopConfig extends SimpleStreamOptions {
 	model: Model<any>;
+
+	/**
+	 * Ablation switches (experiment doc E2). Every one defaults to off;
+	 * when all are undefined the loop behaves byte-identically to vanilla.
+	 */
+
+	/** Hard cap on assistant turns per run. undefined/0 = unlimited (vanilla). */
+	maxTurns?: number;
+
+	/**
+	 * E3 idle detection: after this many consecutive tool-free text turns,
+	 * the loop injects a replan prompt. undefined/0 = off (vanilla).
+	 */
+	maxConsecutiveTextOnlyTurns?: number;
+
+	/**
+	 * F1/F2 parse repair: extract plain-text JSON tool calls from text
+	 * blocks. `style` restricts which JSON shape is accepted
+	 * ("openai" arguments / "legacy" parameters / "both").
+	 */
+	parseRepair?: { enabled: boolean; style: ToolCallJsonStyle };
+
+	/**
+	 * E1 parse-failure retries: on an unparseable tool-call-shaped response
+	 * (or stream error), feed the failure back and re-ask, up to N times.
+	 * undefined/0 = off (vanilla).
+	 */
+	parseFailureRetries?: number;
+
+	/** Observability sink for the ablation events above. */
+	onLoopEvent?: (event: LoopEvent) => void;
 
 	/**
 	 * Converts AgentMessage[] to LLM-compatible Message[] before each LLM call.

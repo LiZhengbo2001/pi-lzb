@@ -44,6 +44,7 @@ export interface Args {
 	themes?: string[];
 	noThemes?: boolean;
 	noContextFiles?: boolean;
+	ablation?: string;
 	listModels?: string | true;
 	offline?: boolean;
 	tuiMode?: TuiMode;
@@ -199,6 +200,8 @@ export function parseArgs(args: string[]): Args {
 			result.projectTrustOverride = false;
 		} else if (arg === "--offline") {
 			result.offline = true;
+		} else if (arg === "--ablation" && i + 1 < args.length) {
+			result.ablation = args[++i];
 		} else if (arg.startsWith("@")) {
 			result.fileArgs.push(arg.slice(1)); // Remove @ prefix
 		} else if (arg.startsWith("--")) {

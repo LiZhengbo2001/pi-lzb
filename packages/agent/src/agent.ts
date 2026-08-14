@@ -21,6 +21,7 @@ import type {
 	AgentTool,
 	BeforeToolCallContext,
 	BeforeToolCallResult,
+	LoopEvent,
 	PrepareNextTurnContext,
 	QueueMode,
 	ShouldStopAfterTurnContext,
@@ -120,6 +121,16 @@ export interface AgentOptions {
 	transport?: Transport;
 	maxRetryDelayMs?: number;
 	toolExecution?: ToolExecutionMode;
+	/** Ablation: hard cap on assistant turns per run (undefined = unlimited). */
+	maxTurns?: number;
+	/** Ablation E3: consecutive tool-free text turns before replan prompt. */
+	maxConsecutiveTextOnlyTurns?: number;
+	/** Ablation F1/F2: extract plain-text JSON tool calls from text blocks. */
+	parseRepair?: AgentLoopConfig["parseRepair"];
+	/** Ablation E1: parse-failure retries with error feedback. */
+	parseFailureRetries?: number;
+	/** Ablation observability: receives loop-level ablation events. */
+	onLoopEvent?: (event: LoopEvent) => void;
 }
 
 class PendingMessageQueue {
@@ -212,6 +223,16 @@ export class Agent {
 	public maxRetryDelayMs?: number;
 	/** Tool execution strategy for assistant messages that contain multiple tool calls. */
 	public toolExecution: ToolExecutionMode;
+	/** Ablation: hard cap on assistant turns per run. */
+	public maxTurns?: number;
+	/** Ablation E3: consecutive tool-free text turns before replan prompt. */
+	public maxConsecutiveTextOnlyTurns?: number;
+	/** Ablation F1/F2: plain-text JSON tool-call repair settings. */
+	public parseRepair?: AgentLoopConfig["parseRepair"];
+	/** Ablation E1: parse-failure retry budget. */
+	public parseFailureRetries?: number;
+	/** Ablation observability: loop-level ablation event sink. */
+	public onLoopEvent?: (event: LoopEvent) => void;
 
 	constructor(options: AgentOptions) {
 		// Older compiled consumers may omit options or streamFn even though the current API requires them.
@@ -235,6 +256,11 @@ export class Agent {
 		this.transport = runtimeOptions.transport ?? "auto";
 		this.maxRetryDelayMs = runtimeOptions.maxRetryDelayMs;
 		this.toolExecution = runtimeOptions.toolExecution ?? "parallel";
+		this.maxTurns = runtimeOptions.maxTurns;
+		this.maxConsecutiveTextOnlyTurns = runtimeOptions.maxConsecutiveTextOnlyTurns;
+		this.parseRepair = runtimeOptions.parseRepair;
+		this.parseFailureRetries = runtimeOptions.parseFailureRetries;
+		this.onLoopEvent = runtimeOptions.onLoopEvent;
 	}
 
 	/**
@@ -455,6 +481,11 @@ export class Agent {
 			thinkingBudgets: this.thinkingBudgets,
 			maxRetryDelayMs: this.maxRetryDelayMs,
 			toolExecution: this.toolExecution,
+			maxTurns: this.maxTurns,
+			maxConsecutiveTextOnlyTurns: this.maxConsecutiveTextOnlyTurns,
+			parseRepair: this.parseRepair,
+			parseFailureRetries: this.parseFailureRetries,
+			onLoopEvent: this.onLoopEvent,
 			beforeToolCall: this.beforeToolCall,
 			afterToolCall: this.afterToolCall,
 			shouldStopAfterTurn: shouldStopAfterTurn

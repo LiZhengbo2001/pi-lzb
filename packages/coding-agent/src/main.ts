@@ -9,6 +9,7 @@ import { createInterface } from "node:readline";
 import { type ImageContent, modelsAreEqual } from "@earendil-works/pi-ai";
 import chalk from "chalk";
 import { type Args, type Mode, parseArgs, printHelp } from "./cli/args.ts";
+import { DEFAULT_ABLATION, parseAblationFlag } from "./ablation/lite.ts";
 import {
 	type AuthCheckResult,
 	checkProviderAuth,
@@ -618,6 +619,17 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 	time("parseArgs");
 
+	// Ablation switches (experiment doc E2). Default: everything off (vanilla).
+	let ablationConfig = DEFAULT_ABLATION;
+	if (parsed.ablation) {
+		try {
+			ablationConfig = parseAblationFlag(parsed.ablation);
+		} catch (error) {
+			console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+			process.exit(1);
+		}
+	}
+
 	if (parsed.version) {
 		console.log(VERSION);
 		process.exit(0);
@@ -803,6 +815,7 @@ export async function main(args: string[], options?: MainOptions) {
 			modelRuntime,
 			settingsManager,
 		);
+		sessionOptions.ablation = ablationConfig;
 		diagnostics.push(...sessionOptionDiagnostics);
 
 		if (parsed.apiKey) {
@@ -827,6 +840,7 @@ export async function main(args: string[], options?: MainOptions) {
 			excludeTools: sessionOptions.excludeTools,
 			noTools: sessionOptions.noTools,
 			customTools: sessionOptions.customTools,
+			ablation: sessionOptions.ablation,
 		});
 		const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
 		if (created.session.model && cliThinkingOverride) {
